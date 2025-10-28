@@ -25,12 +25,42 @@ Tensor = torch.Tensor
 class BezierPath:
     """Container describing a coloured Bézier curve. / 描述带颜色贝塞尔曲线的容器。"""
 
-    control_points: Tensor  # (..., 4, 2) shape / 张量形状 (..., 4, 2)
+    curve: CubicBezier  # Underlying cubic geometry / 底层三次贝塞尔曲线
     width: Tensor  # (...,) shape / 张量形状 (...,)
     color: Tensor  # (..., 4) RGBA in [0, 1] / RGBA 分量范围 [0, 1]
 
+    def __post_init__(self) -> None:
+        """Ensure tensors match the Bézier batch layout. / 确认张量与贝塞尔批次布局一致。"""
+
+        batch_shape = self.curve.control_points.shape[:-2]
+        expected_width_shape = batch_shape if batch_shape else (1,)
+        expected_color_shape = (*batch_shape, 4) if batch_shape else (1, 4)
+
+        if self.width.shape != expected_width_shape:
+            raise ValueError(
+                "BezierPath.width must match the Bézier batch shape. / BezierPath.width 的形状必须与贝塞尔批次形状一致。"
+            )
+        if self.color.shape != expected_color_shape:
+            raise ValueError(
+                "BezierPath.color must be (..., 4) to align with the batch. / BezierPath.color 必须为 (..., 4) 以匹配批次形状。"
+            )
+
+    @classmethod
+    def from_control_points(cls, control_points: Tensor, width: Tensor, color: Tensor) -> "BezierPath":
+        """Build a path from raw control points. / 使用原始控制点构建路径。"""
+
+        return cls(curve=CubicBezier(control_points), width=width, color=color)
+
     def as_bezier(self) -> CubicBezier:
-        return CubicBezier(self.control_points)
+        """Expose the cubic curve for downstream modules. / 为下游模块提供三次曲线对象。"""
+
+        return self.curve
+
+    @property
+    def control_points(self) -> Tensor:
+        """Convenience accessor mirroring the old API. / 兼容旧版 API 的控制点访问器。"""
+
+        return self.curve.control_points
 
 
 def _prepare_grid(height: int, width: int, device: torch.device, dtype: torch.dtype) -> Tuple[Tensor, Tensor]:
@@ -78,20 +108,21 @@ class BezierSplatRenderer:
         """
 
         cfg = self.config
-        background = torch.tensor(cfg.background, device=self.device, dtype=path.color.dtype)
 
         # Convert inputs to tensors on the correct device. / 将输入张量移动到目标设备。
-        control_points = path.control_points.to(self.device)
+        curve = path.as_bezier()
+        control_points = curve.control_points.to(self.device)
         width = path.width.to(self.device)
         color = path.color.to(self.device)
+        background = torch.tensor(cfg.background, device=self.device, dtype=color.dtype)
 
         if control_points.dim() == 2:
             control_points = control_points.unsqueeze(0)
             width = width.unsqueeze(0)
             color = color.unsqueeze(0)
 
-        bezier = CubicBezier(control_points)
-        positions, lengths = bezier.sample(cfg.curve_samples)
+        curve_on_device = CubicBezier(control_points)
+        positions, lengths = curve_on_device.sample(cfg.curve_samples)
 
         # Convert to pixel coordinates. / 将坐标转换为像素空间。
         # Width scales so one unit equals the smaller canvas side, keeping strokes consistent. /

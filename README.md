@@ -41,7 +41,7 @@ width = torch.tensor([0.05], dtype=torch.float32)
 color = torch.tensor([[0.9, 0.2, 0.2, 1.0]], dtype=torch.float32)
 
 renderer = BezierSplatRenderer(RendererConfig(canvas_width=256, canvas_height=256))
-image = renderer.render(BezierPath(control_points, width, color))
+image = renderer.render(BezierPath.from_control_points(control_points, width, color))
 ```
 
 The snippet above shows how to render a single cubic Bézier curve. / 上述代码片段演示了如何渲染单条三次贝塞尔曲线。

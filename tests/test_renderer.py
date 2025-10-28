@@ -13,7 +13,7 @@ def _simple_path(require_grad: bool = False) -> BezierPath:
     )
     width = torch.tensor([0.05], dtype=torch.float32)
     color = torch.tensor([[0.9, 0.2, 0.2, 1.0]], dtype=torch.float32)
-    return BezierPath(control_points=control_points, width=width, color=color)
+    return BezierPath.from_control_points(control_points=control_points, width=width, color=color)
 
 
 def test_renderer_output_shape_and_range() -> None:

@@ -35,7 +35,7 @@ def make_heart_path() -> BezierPath:
         ],
         dtype=torch.float32,
     )
-    return BezierPath(control_points=control_points, width=width, color=color)
+    return BezierPath.from_control_points(control_points=control_points, width=width, color=color)
 
 
 def main() -> None:
